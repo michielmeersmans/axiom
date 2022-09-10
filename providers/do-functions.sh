@@ -111,7 +111,7 @@ instance_exists() {
 list_regions() {
     doctl compute region list
 }
-
+f
 regions() {
     doctl compute region list -o json | jq -r '.[].slug'
 }
@@ -314,22 +314,26 @@ fi
 }
 
 create_instance() {
-	name="$1"
-	image_id="$2"
-	size_slug="$3"
-	region="$4"
-	boot_script="$5"
-  sshkey="$(cat "$AXIOM_PATH/axiom.json" | jq -r '.sshkey')"
-  sshkey_fingerprint="$(ssh-keygen -l -E md5 -f ~/.ssh/$sshkey.pub | awk '{print $2}' | cut -d : -f 2-)"
-  keyid=$(doctl compute ssh-key import $sshkey \
-    --public-key-file ~/.ssh/$sshkey.pub \
-    --format ID \
-    --no-header 2>/dev/null) ||
-  keyid=$(doctl compute ssh-key list | grep "$sshkey_fingerprint" | awk '{ print $1 }')
-  
-  doctl compute droplet create "$name" --image "$image_id" --size "$size" --region "$region" --wait --enable-ipv6 --user-data-file "$boot_script" --ssh-keys "$keyid" >/dev/null 2>&1
-  
-  sleep 10
+        current=$(ls -lh ~/.axiom/axiom.json | awk '{ print $11 }' | tr '/' '\n' | grep json) > /dev/null 2>&1
+        name="$1"
+        image_id="$2"
+        size_slug="$3"
+        region="$4"
+        boot_script="$5"
+        sshkey="$(cat "$AXIOM_PATH/axiom.json" | jq -r '.sshkey')"
+        sshkey_fingerprint="$(ssh-keygen -l -E md5 -f ~/.ssh/$sshkey.pub | awk '{print $2}' | cut -d : -f 2-)"
+        keyid="$(cat "$AXIOM_PATH/axiom.json" | jq -r '.keyid')"
+        if [[ "$keyid" == "null" ]] || [[ "$keyid" == '' ]]; then
+        keyid=$(doctl compute ssh-key import $sshkey \
+         --public-key-file ~/.ssh/$sshkey.pub \
+         --format ID \
+         --no-header 2>/dev/null) ||  keyid=$(doctl compute ssh-key list | grep "$sshkey_fingerprint" | awk '{ print $1 }')
+        sshkeyid_new="$AXIOM_PATH/axiom.json$RANDOM"
+        cat "$AXIOM_PATH/axiom.json" | jq --arg keyid "$keyid" '. + {keyid: $keyid}' > "$sshkeyid_new" && mv "$sshkeyid_new" "$AXIOM_PATH/accounts/$current"
+        fi
+
+ doctl compute droplet create "$name" --image "$image_id" --size "$size" --region "$region" --wait --enable-ipv6 --user-data-file "$boot_script" --ssh-keys "$keyid" >/dev/null 2>&1
+
 }
 
 # Function used for splitting $src across $instances and rename the split files.
